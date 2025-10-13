@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>D&D 3‑Reel Slot (GP/SP)</title>
+  <style>
+    :root{
+      --bg:#0e0f14;--panel:#161821;--accent:#d6b26d;--display-font:"Segment",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(80% 80% at 50% 20%,#1a1d27 0%,var(--bg) 60%);color:#e8ecf1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell;display:flex;align-items:center;justify-content:center;padding:18px}
+    .machine{width:min(980px,96vw);background:linear-gradient(180deg,#1b1f2a 0%,var(--panel) 100%);border:1px solid #2a2e3c;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05);padding:16px 16px 12px}
+    .topbar{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:12px}
+    .brand{font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+    .stats{display:flex;gap:8px;justify-self:end;flex-wrap:wrap}
+    .pill{background:#0f1118;border:1px solid #2a2e3c;border-radius:12px;padding:6px 10px;font-size:14px}
+    .display{font-family:var(--display-font);letter-spacing:.04em}
+
+    .reels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px;background:#0e1119;border:1px solid #2a2e3c;border-radius:14px;position:relative}
+    .reel-window{height:330px;background:#0a0c12;border:2px solid #2f3444;border-radius:12px;overflow:hidden;position:relative;box-shadow:inset 0 8px 16px rgba(0,0,0,.5)}
+    .strip{position:absolute;left:0;right:0;top:0;will-change:transform;filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
+    .symbol{height:110px;display:flex;align-items:center;justify-content:center}
+    .symbol img{height:100%;width:auto}
+    .symbol.fallback{color:#9aa3b2;font-weight:700;font-size:28px;background:linear-gradient(180deg,#121522,#0a0d17);border-bottom:1px solid #1f2433}
+
+    .controls{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+    button{cursor:pointer;background:#1a2030;color:#e8ecf1;border:1px solid #2c3346;border-radius:12px;padding:12px;font-weight:700;transition:transform .05s ease,background .15s ease,border-color .15s ease}
+    button:hover{background:#21283b}button:active{transform:translateY(1px)}button[disabled]{opacity:.55;cursor:not-allowed}
+    .primary{background:linear-gradient(180deg,#1c2948,#152038);border-color:#334368}
+    .accent{background:linear-gradient(180deg,#3a2d10,#2a210d);border-color:#5b471e;color:#f5e2b9}
+    .danger{background:linear-gradient(180deg,#3a1111,#2a0d0d);border-color:#6b2a2a}
+
+    .status{margin-top:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .status .msg{opacity:.9}
+
+    @media (max-width:720px){.controls{grid-template-columns:repeat(2,1fr)}.topbar{grid-template-columns:1fr;gap:6px}.stats{justify-self:start}}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:9999}
+    .modal.on{display:flex}
+    .modal-card{background:#111520;border:1px solid #2a2e3c;border-radius:12px;max-width:520px;width:92vw;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+    .modal-card h3{margin:0 0 8px 0}
+    .modal-card pre{white-space:pre-wrap;background:#0b0f18;border:1px solid #232a3a;border-radius:8px;padding:10px;margin:8px 0}
+    .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+  </style>
+</head>
+<body>
+  <div class="machine" id="machine">
+    <div class="topbar">
+      <div class="brand">MONSTER TAMER</div>
+      <div class="pill display" id="wagerDisp">Wager: 0000 GP | Spent: 0 GP 0 SP</div>
+      <div class="stats">
+   
+        <div class="pill display" id="betChoiceDisp">Bet: 1 GP</div>
+        <button class="pill" id="btnMute" title="Toggle sound">🔊</button>
+      </div>
+    </div>
+
+    <div class="reels">
+      <div class="reel-window"><div class="strip" id="strip0"></div></div>
+      <div class="reel-window"><div class="strip" id="strip1"></div></div>
+      <div class="reel-window"><div class="strip" id="strip2"></div></div>
+    </div>
+
+    <div class="controls">
+      <button id="btnChange">Change Bet</button>
+      <button id="btnInsert" class="accent">Insert Bet</button>
+      <button id="btnSpin" class="primary">Spin Reels</button>
+      <button id="btnReset" class="danger">Cash Out</button>
+    </div>
+
+    <div class="status">
+      <div class="msg" id="statusMsg">Ready.</div>
+      <div class="pill display" id="adjustmentDisp">Total Adjustment: 0 GP</div>
+      <div class="pill display" id="paytableInline">3OAK pays here</div>
+    </div>
+  </div>
+
+  <!-- Custom confirm modal for Reset -->
+  <div class="modal" id="confirmModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <h3 id="confirmTitle">Update Sheets Before Cashout</h3>
+      <pre id="confirmBody">Are you sure?</pre>
+      <div class="modal-actions">
+        <button id="confirmNo">Cancel</button>
+        <button class="danger" id="confirmYes">Cash Out</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (()=>{
+    // ---------- CONFIG (edit these) ----------
+    const CONFIG = {
+      LOOSENESS: 0.07,        // 18% chance a spin is a 3-of-a-kind win
+      TWO_KIND_PAY_MULT: .75, // 2-of-a-kind payout (1.0 = money back; 0 disables)
+      MAJOR_THRESHOLD: 20,    // ≥ this multiplier uses the “major win” sound
+      HIGH_PAY_BIAS: 0.6,     // 0.0 flat, 1.0 strongly favors low pays on wins
+    };
+
+    // Map symbol id (1..SYMBOL_COUNT) to friendly names shown in results.
+    // Edit these to match your art files. Missing/empty names will fall back to "Symbol <id>".
+    const SYMBOL_NAMES = [
+      null, // index 0 unused so ids line up with indexes
+      "Goblin","Rust Monster","Gelatinous Cube","Gibbering Mouther","Mimic","Blink Dog",
+      "Displacer Beast","Owlbear","Beholder","Mind Flayer","Green Dragon","Terrasque"
+    ];
+
+    const SYMBOL_COUNT = 12;                  // images/1.png .. images/12.png
+    const REEL_VISIBLE = 3;                   // 3 rows visible
+    const SYMBOL_H = 110;                     // each symbol cell height (px)
+    const REPEAT_COUNT = 8;                   // repeated strip blocks to prevent disappearing
+    const BET_OPTIONS = [1,2,5,10,25,50,100,500,1000,5000];
+    const MULTIPLIERS = [2,3,5,8,12,18,25,40,60,100,200,500];
+    const WEIGHTS =   [12,10,8,6,5,4,3,2,2,1,1,1]; // visual density only
+
+    // ---------- Sounds (simple WAV setup) ----------
+    const SFX = {
+      insert: new Audio('sounds/1.wav'),
+      spin:   new Audio('sounds/2.wav'),
+      winMinor: new Audio('sounds/3.wav'),
+      winMajor: new Audio('sounds/4.wav'),
+    };
+    SFX.spin.preload = 'auto';
+    SFX.spin.loop = true;
+
+    // Helpers
+    const playOne = (a)=>{ try{ a.currentTime = 0; if(!muted) a.play(); }catch{} };
+    function startSpinSound(){
+      try{ if(!muted){ SFX.spin.loop = true; SFX.spin.currentTime = 0; SFX.spin.play(); } }catch{}
+    }
+    function stopSpinSound(){
+      try{ SFX.spin.loop = false; SFX.spin.pause(); SFX.spin.currentTime = 0; }catch{}
+    }
+
+    // ---------- State ----------
+    let betIndex = 0, wagerGP = 0, creditsSP = 0, lastWinSP = 0, totalSpentSP = 0, spinning = false, muted = false;
+
+    // ---------- DOM ----------
+    const $ = (id)=>document.getElementById(id);
+    const strips=[$('strip0'),$('strip1'),$('strip2')];
+//    const wagerDisp=$('wagerDisp'), creditsDisp=$('creditsDisp');
+    const statusMsg=$('statusMsg');
+    const betChoiceDisp=$('betChoiceDisp');
+    const adjustmentDisp=$('adjustmentDisp');
+    const paytableInline=$('paytableInline');
+    const btnChange=$('btnChange'), btnInsert=$('btnInsert'), btnSpin=$('btnSpin'), btnReset=$('btnReset'), btnMute=$('btnMute');
+
+    // ---------- Helpers ----------
+    const gpSp = (sp)=>({gp:Math.floor(sp/10), sp:sp%10});
+    const fmtGP = (gp)=>String(gp).padStart(4,'0');
+    const fmtCoin = (sp)=>{ const {gp,sp:spc}=gpSp(sp); return `${gp} GP ${spc} SP`; };
+    const nameOf = (id)=>{
+      const n = SYMBOL_NAMES[id];
+      return (typeof n === 'string' && n.trim().length>0) ? n : `Symbol ${id}`;
+    };
+
+    function buildStrip(){
+      const strip=[]; for(let s=1;s<=SYMBOL_COUNT;s++){ const w=WEIGHTS[s-1]||1; for(let i=0;i<w;i++) strip.push(s); }
+      for(let i=strip.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [strip[i],strip[j]]=[strip[j],strip[i]]; }
+      return strip;
+    }
+    function mountStrip(el, strip){
+      el.innerHTML='';
+      const IMAGE_EXTS = ['png','webp','jpg','jpeg'];
+      function makeSymbolDiv(id){
+        const div=document.createElement('div'); div.className='symbol';
+        const img=document.createElement('img'); img.alt=`Symbol ${id}`;
+        let idx=0;
+        function tryNext(){
+          if(idx>=IMAGE_EXTS.length){ div.classList.add('fallback'); div.textContent=id; return; }
+          img.src = `images/${id}.`+IMAGE_EXTS[idx++];
+        }
+        img.onerror = ()=>{ tryNext(); };
+        tryNext();
+        div.appendChild(img);
+        return div;
+      }
+      for(let r=0;r<REPEAT_COUNT;r++){
+        for(let i=0;i<strip.length;i++){
+          el.appendChild(makeSymbolDiv(strip[i]));
+        }
+      }
+      el.style.transform='translateY(0px)';
+    }
+
+    const reelData=[buildStrip(),buildStrip(),buildStrip()];
+    reelData.forEach((a,i)=>mountStrip(strips[i],a));
+
+    function renderPaytable(){
+      const rows=MULTIPLIERS.map((m,i)=>`#${i+1}→${m}x`).join('  ');
+      const two=CONFIG.TWO_KIND_PAY_MULT>0?` | 2-kind: ${CONFIG.TWO_KIND_PAY_MULT}x`:'';
+      const loose=` | Looseness: ${(CONFIG.LOOSENESS*100).toFixed(0)}%`;
+      const txt = `3OAK pays: ${rows}${two}${loose}`;
+      if(paytableInline) paytableInline.textContent = txt;
+    }
+
+    function render(){
+      const spent = gpSp(totalSpentSP);
+      wagerDisp.textContent=`Wager: ${fmtGP(wagerGP)} GP | Spent: ${spent.gp} GP ${spent.sp} SP`;
+//      const c=gpSp(creditsSP); creditsDisp.textContent=`Credits: ${c.gp} GP ${c.sp} SP`;
+      if(betChoiceDisp) betChoiceDisp.textContent=`Denom: ${BET_OPTIONS[betIndex]} GP`;
+
+      // Adjustment = credits - spent
+      const adjSP = creditsSP - totalSpentSP;
+      const adj = gpSp(Math.abs(adjSP));
+      const sign = adjSP>=0?"":"-";
+      if(adjustmentDisp){
+        adjustmentDisp.textContent = `Total Adjustment: ${sign}${adj.gp} GP ${adj.sp} SP`;
+        adjustmentDisp.style.color = adjSP<0?"red":"inherit";
+      }
+
+      if(btnMute) btnMute.textContent=muted?'🔇':'🔊';
+
+      // Inline paytable (kept to bottom bar only)
+      renderPaytable();
+    }
+    render();
+
+    function disableControls(d){ [btnChange,btnInsert,btnSpin,btnReset].forEach(b=>b.disabled=d); }
+
+    // Weighted pick for win symbol distribution
+    function buildWinWeights(){
+      const raw=MULTIPLIERS.map(m=>1/Math.pow(m,CONFIG.HIGH_PAY_BIAS));
+      const scale=100/raw.reduce((a,b)=>a+b,0); return raw.map(x=>Math.max(1,Math.round(x*scale)));
+    }
+    const WIN_WEIGHTS=buildWinWeights();
+    function weightedPick(ws){ let t=ws.reduce((a,b)=>a+b,0), r=Math.random()*t; for(let i=0;i<ws.length;i++){ r-=ws[i]; if(r<=0) return i+1;} return ws.length; }
+    function symAt(arr, idx){ const n=((idx % arr.length)+arr.length)%arr.length; return arr[n]; }
+
+    function indexOfRandomOccurrence(arr, sym){ const idxs=[]; for(let i=0;i<arr.length;i++) if(arr[i]===sym) idxs.push(i); if(!idxs.length) return Math.floor(Math.random()*arr.length); return idxs[Math.floor(Math.random()*idxs.length)]; }
+
+    function spin(){
+      if(spinning) return; if(wagerGP<=0){ statusMsg.textContent='Insert a bet first.'; return; }
+      spinning=true; disableControls(true); lastWinSP=0; render();
+      try{ SFX.winMinor.pause(); SFX.winMinor.currentTime = 0; }catch{}
+      try{ SFX.winMajor.pause(); SFX.winMajor.currentTime = 0; }catch{}
+      stopSpinSound();
+      startSpinSound();
+
+      // Track total spent (coin-in) since last reset
+      totalSpentSP += (wagerGP * 10);
+      render();
+
+      const isWin=Math.random()<CONFIG.LOOSENESS; let resultSymbol=0; if(isWin) resultSymbol=weightedPick(WIN_WEIGHTS);
+      const stops=[0,0,0], syms=[0,0,0];
+      if(isWin){ for(let r=0;r<3;r++){ stops[r]=indexOfRandomOccurrence(reelData[r],resultSymbol); syms[r]=resultSymbol; } }
+      else{
+        const randSym=()=>1+Math.floor(Math.random()*SYMBOL_COUNT);
+        syms[0]=randSym(); syms[1]=randSym();
+        if(syms[1]===syms[0]) syms[2]=(syms[0]%SYMBOL_COUNT)+1; else { syms[2]=syms[0]; if(Math.random()<0.4) syms[2]=randSym(); }
+        for(let r=0;r<3;r++) stops[r]=indexOfRandomOccurrence(reelData[r],syms[r]);
+      }
+
+      const durations=[900,1200,1500], easing='cubic-bezier(.22,.61,.36,1)';
+      strips.forEach((el,r)=>{ 
+        const arr=reelData[r];
+        const tiles=arr.length;
+        const passes=2+r;              // visual spin length per reel
+        const BASE_BLOCK=3;            // land inside the middle of 8 repeats
+        const targetTopIndex=(BASE_BLOCK+passes)*tiles + (stops[r]-1); // -1 centers chosen symbol in middle row
+        const y=-targetTopIndex*SYMBOL_H;
+        el.style.transition=`transform ${durations[r]}ms ${easing}`;
+        requestAnimationFrame(()=>{ el.style.transform=`translateY(${y}px)`; });
+      });
+
+      setTimeout(()=>{
+        stopSpinSound();
+        // Determine ACTUAL visible middle-row symbols from our chosen stops
+        const visSyms=[ symAt(reelData[0], stops[0]), symAt(reelData[1], stops[1]), symAt(reelData[2], stops[2]) ];
+
+        // Payout: 3OAK else optional 2-of-a-kind tease
+        let payoutSP=0; const wagerSP=wagerGP*10;
+        if(visSyms[0]===visSyms[1] && visSyms[1]===visSyms[2]){
+          const mult=MULTIPLIERS[visSyms[0]-1]||0; payoutSP=Math.floor(wagerSP*mult);
+        } else if (CONFIG.TWO_KIND_PAY_MULT>0 && (visSyms[0]===visSyms[1] || visSyms[1]===visSyms[2] || visSyms[0]===visSyms[2])){
+          payoutSP=Math.floor(wagerSP*CONFIG.TWO_KIND_PAY_MULT);
+        }
+
+        creditsSP+=payoutSP; lastWinSP=payoutSP; const prevWager=wagerGP; wagerGP=0;
+
+        if(payoutSP>0){ const actualMult=(payoutSP/(prevWager*10))||0; if(actualMult>=CONFIG.MAJOR_THRESHOLD) playOne(SFX.winMajor); else playOne(SFX.winMinor); }
+        const visNames = visSyms.map(id=>nameOf(id));
+        if(payoutSP>0){
+          const {gp,sp}=gpSp(payoutSP);
+          statusMsg.textContent = `WIN! ${gp} GP ${sp} SP (${visNames.join(' - ')})`;
+        } else {
+          statusMsg.textContent = `No win (results: ${visNames.join(' - ')})`;
+        }
+
+        // Normalize to a safe base block so reels never run off repeated content
+        strips.forEach((el,r)=>{
+          const tiles=reelData[r].length;
+          const BASE_BLOCK=3;
+          const normalizedIndex=(BASE_BLOCK*tiles) + (stops[r]-1);
+          el.style.transition='none';
+          el.style.transform=`translateY(${-normalizedIndex*SYMBOL_H}px)`;
+        });
+        spinning=false; disableControls(false); render();
+      },1550);
+    }
+
+    // ---------- Reset modal helpers ----------
+    const modal=$('confirmModal'), confirmBody=$('confirmBody'), confirmYes=$('confirmYes'), confirmNo=$('confirmNo');
+    function openConfirm(msg, onYes){
+      confirmBody.textContent=msg; modal.classList.add('on');
+      const off=()=>modal.classList.remove('on');
+      const yesHandler=()=>{ off(); onYes&&onYes(); cleanup(); };
+      const noHandler=()=>{ off(); cleanup(); };
+      function cleanup(){ confirmYes.removeEventListener('click',yesHandler); confirmNo.removeEventListener('click',noHandler); }
+      confirmYes.addEventListener('click',yesHandler); confirmNo.addEventListener('click',noHandler);
+    }
+
+    // ---------- Events ----------
+    btnChange.addEventListener('click',()=>{ if(spinning) return; betIndex=(betIndex+1)%BET_OPTIONS.length; render(); });
+    btnInsert.addEventListener('click',()=>{ if(spinning) return; wagerGP+=BET_OPTIONS[betIndex]; playOne(SFX.insert); statusMsg.textContent=`Inserted ${BET_OPTIONS[betIndex]} GP. Wager is now ${wagerGP} GP.`; render(); });
+    btnSpin.addEventListener('click',spin);
+    btnReset.addEventListener('click',()=>{ if(spinning) return; 
+      const spentTxt = fmtCoin(totalSpentSP);
+      const creditsTxt = fmtCoin(creditsSP);
+      const adjSP = creditsSP - totalSpentSP;
+      const sign = adjSP>=0?"":"-";
+      const adjAbsTxt = fmtCoin(Math.abs(adjSP));
+      const msg = `Final Totals\n\nSpent: ${spentTxt}\nCredits: ${creditsTxt}\nTotal Adjustment: ${sign}${adjAbsTxt}`;
+      openConfirm(msg, ()=>{ betIndex=0; wagerGP=0; creditsSP=0; lastWinSP=0; totalSpentSP=0; muted=false; render(); statusMsg.textContent='State reset.'; });
+    });
+    btnMute.addEventListener('click',()=>{ muted=!muted; if(muted) stopSpinSound(); render(); });
+
+    // Shortcuts
+    window.addEventListener('keydown',(e)=>{ if(e.repeat) return; const k=e.key.toLowerCase(); if(k==='c') btnChange.click(); if(k==='i') btnInsert.click(); if(k==='s') btnSpin.click(); if(k==='m') btnMute.click(); });
+
+    // ---------- Self-tests (basic sanity) ----------
+    (function selfTest(){
+      try{
+        console.assert(typeof spin === 'function', 'spin() should exist');
+        console.assert(typeof totalSpentSP === 'number', 'totalSpentSP exists');
+        console.assert(Array.isArray(reelData) && reelData.length===3, 'reelData should have 3 reels');
+        console.assert(document.querySelectorAll('.strip').length===3, 'three strip elements present');
+        console.assert(SFX && SFX.spin instanceof Audio, 'spin SFX exists');
+        console.assert(document.getElementById('adjustmentDisp'), 'adjustmentDisp exists');
+        console.assert(document.getElementById('paytableInline'), 'paytableInline exists');
+        console.assert(typeof nameOf==='function', 'nameOf exists');
+        // Ensure paytable text renders
+        renderPaytable();
+        console.assert(document.getElementById('paytableInline').textContent.startsWith('3OAK pays:'), 'paytableInline renders text');
+      }catch(e){ console.error('Self-test failed:', e); }
+    })();
+  })();
+  </script>
+</body>
+</html>
