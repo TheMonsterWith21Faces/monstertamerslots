@@ -1,7 +1,4 @@
-.-.   .-. .----. .-. .-. .----..---. .----..----.  .---.  .--.  .-.   .-..----..----. 
-|  `.'  |/  {}  \|  `| |{ {__ {_   _}| {_  | {}  }{_   _}/ {} \ |  `.'  || {_  | {}  }
-| |\ /| |\      /| |\  |.-._} } | |  | {__ | .-. \  | | /  /\  \| |\ /| || {__ | .-. \
-`-' ` `-' `----' `-' `-'`----'  `-'  `----'`-' `-'  `-' `-'  `-'`-' ` `-'`----'`-' `-'
+<h1>MONSTER TAMER</h1>
 
 Monster Tamer Slots
 This is a simulated gambling game for Dungeons & Dragons or any other TTRPG or just for shits and giggles.
